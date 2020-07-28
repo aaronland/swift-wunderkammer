@@ -9,19 +9,19 @@
 import Foundation
 
 public struct OEmbedResponse: Codable {
-    var version: String
-    var type: String
-    var provider_name: String
-    var title: String
-    var author_url: String? // SFO Museum but not Cooper Hewitt
-    var url: String
-    var height: Int
-    var width: Int
-    var thumbnail_url: String?
-    var object_url: String? // Cooper Hewitt
-    var object_id: String?  // Cooper Hewitt
-    var object_uri: String? // wunderkammer
-    var data_url: String? // wunderkammer
+    public var version: String
+    public var type: String
+    public var provider_name: String
+    public var title: String
+    public var author_url: String? // SFO Museum but not Cooper Hewitt
+    public var url: String
+    public var height: Int
+    public var width: Int
+    public var thumbnail_url: String?
+    public var object_url: String? // Cooper Hewitt
+    public var object_id: String?  // Cooper Hewitt
+    public var object_uri: String? // wunderkammer
+    public var data_url: String? // wunderkammer
 }
 
 public class OEmbed {
