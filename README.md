@@ -1,3 +1,3 @@
-# Wunderkammer
+# swift-wunderkammer
 
-A description of this package.
+Work in progress.
