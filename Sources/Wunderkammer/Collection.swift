@@ -8,7 +8,11 @@
 
 import Foundation
 import URITemplate
+import Cocoa
+
+#if !os(macOS)
 import UIKit
+#endif
 
 public enum CollectionSaveObjectResponse {
     case success
@@ -51,4 +55,24 @@ public protocol Collection {
     func ObjectTagTemplate() -> Result<URITemplate, Error>
     func ObjectURLTemplate() -> Result<URITemplate, Error>
     func OEmbedURLTemplate() -> Result<URITemplate, Error>
+}
+
+// https://www.swiftbysundell.com/tips/making-uiimage-macos-compatible/
+// Step 1: Typealias UIImage to NSImage
+
+public  typealias UIImage = NSImage
+
+// Step 2: You might want to add these APIs that UIImage has but NSImage doesn't.
+extension NSImage {
+    var cgImage: CGImage? {
+        var proposedRect = CGRect(origin: .zero, size: size)
+
+        return cgImage(forProposedRect: &proposedRect,
+                       context: nil,
+                       hints: nil)
+    }
+
+    convenience init?(named name: String) {
+        self.init(named: Name(name))
+    }
 }
