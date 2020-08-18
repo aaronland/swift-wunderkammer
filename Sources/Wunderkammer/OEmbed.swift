@@ -22,6 +22,7 @@ public struct OEmbedResponse: Codable {
     public var object_id: String?  // Cooper Hewitt
     public var object_uri: String? // wunderkammer
     public var data_url: String? // wunderkammer
+    public var thumbnail_data_url: String? // wunderkammer
 }
 
 public class OEmbed {
