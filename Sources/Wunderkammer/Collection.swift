@@ -8,7 +8,7 @@
 
 import Foundation
 import URITemplate
-import UIKit
+
 
 public enum CollectionSaveObjectResponse {
     case success
