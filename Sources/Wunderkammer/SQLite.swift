@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 import FMDB
 import URITemplate
@@ -10,10 +11,22 @@ public enum SQLiteCollectionErrors: Error {
     case missingDatabaseFiles
     case databaseOpen
     case invalidURL
+    case invalidOEmbed
+    case missingUnitID
+    case missingUnitDatabase
     case missingOEmbedQueryParameter
 }
 
+public struct SQLiteCollectionOptions {
+    public var root: String
+    public var scheme: String
+    public var resolver: DatabaseResolver
+    public var logginer: Logger?
+}
+
 public class SQLiteCollection: Collection, Sequence {
+    
+    // FIX ME
     
     private var cache = NSCache<NSString,CollectionOEmbed>()
     private var databases = [String:FMDatabase]()
@@ -98,6 +111,9 @@ public class SQLiteCollection: Collection, Sequence {
         var results: FMResultSet?
         
         do {
+            
+            // FIX ME
+            
             let rs = try databases["gallery"]!.executeQuery(q, values: nil)
             results = rs
         } catch (let error) {
@@ -192,7 +208,7 @@ public class SQLiteCollection: Collection, Sequence {
         }
         
         guard let database = self.databases[unit!] else {
-            return .failure(GSQLiteCollectionErrors.missingUnitDatabase)
+            return .failure(SQLiteCollectionErrors.missingUnitDatabase)
         }
         
         var oe_data: Data?
@@ -221,10 +237,11 @@ public class SQLiteCollection: Collection, Sequence {
             return .failure(error)
         case .success(let oe_response):
             
+            // FIX ME
+            
             guard let collection_oe = GalleryOEmbed(oembed: oe_response) else {
                 return .failure(SQLiteCollectionErrors.invalidOEmbed)
             }
-            
             
             cache.setObject(collection_oe, forKey: cache_key)
             
@@ -248,6 +265,8 @@ public class SQLiteCollection: Collection, Sequence {
     }
     
     public func HasCapability(capability: CollectionCapabilities) -> Result<Bool, Error> {
+        
+        // FIX ME
         
         switch capability {
         case CollectionCapabilities.nfcTags:
