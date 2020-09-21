@@ -7,6 +7,7 @@ import URITemplate
 import Logging
 
 public enum SQLiteCollectionErrors: Error {
+    case missingScheme
     case missingDatabaseRoot
     case missingDatabaseFiles
     case databaseOpen
@@ -17,18 +18,29 @@ public enum SQLiteCollectionErrors: Error {
     case missingOEmbedQueryParameter
 }
 
+public enum SQLiteOEmbedRecordErrors: Error {
+        case missingObjectURI
+    case missingScheme
+    
+}
 public class SQLiteOEmbedRecord: CollectionOEmbed {
     
     private var oembed: OEmbedResponse
+    private var scheme: String
     
     // https://github.com/aaronland/ios-wunderkammer/issues/17
     
-    public init?(oembed: OEmbedResponse) {
+    public init (oembed: OEmbedResponse, scheme: String? = "sqlite") throws {
         
         guard let _ = oembed.object_uri else {
-            return nil
+            throw SQLiteOEmbedRecordErrors.missingObjectURI
         }
         
+        guard let _ = scheme else {
+            throw SQLiteOEmbedRecordErrors.missingScheme
+        }
+        
+        self.scheme = scheme!
         self.oembed = oembed
     }
     
@@ -48,7 +60,7 @@ public class SQLiteOEmbedRecord: CollectionOEmbed {
         
         guard let object_uri = self.oembed.object_uri else {
             let id = self.ObjectID()
-            return "gallery://x/\(id)"
+            return "\(self.scheme)://x/\(id)"
         }
         
         return object_uri
@@ -82,12 +94,14 @@ public class SQLiteOEmbedRecord: CollectionOEmbed {
     
 }
 
+/*
 public struct SQLiteCollectionOptions {
     public var root: String
     public var scheme: String
     public var resolver: DatabaseResolver
     public var logginer: Logger?
 }
+*/
 
 public class SQLiteCollection: Collection, Sequence {
         
@@ -104,6 +118,13 @@ public class SQLiteCollection: Collection, Sequence {
         
         self.logger = logger
         self.resolver = resolver
+        
+        guard let _ = scheme else {
+            throw SQLiteCollectionErrors.missingScheme
+        }
+        
+        self.scheme = scheme!
+        
         let fm = FileManager.default
         
         let paths = fm.urls(for: .documentDirectory, in: .userDomainMask)
@@ -299,11 +320,13 @@ public class SQLiteCollection: Collection, Sequence {
         case .failure(let error):
             return .failure(error)
         case .success(let oe_response):
+              
+            var collection_oe: SQLiteOEmbedRecord
             
-            // FIX ME
-            
-            guard let collection_oe = SQLiteOEmbedRecord(oembed: oe_response) else {
-                return .failure(SQLiteCollectionErrors.invalidOEmbed)
+            do {
+              collection_oe = try SQLiteOEmbedRecord(oembed: oe_response)
+            } catch (let error) {
+                return .failure(error)
             }
             
             cache.setObject(collection_oe, forKey: cache_key)
