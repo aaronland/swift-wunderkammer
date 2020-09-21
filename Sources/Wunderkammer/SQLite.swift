@@ -17,6 +17,71 @@ public enum SQLiteCollectionErrors: Error {
     case missingOEmbedQueryParameter
 }
 
+public class SQLiteOEmbedRecord: CollectionOEmbed {
+    
+    private var oembed: OEmbedResponse
+    
+    // https://github.com/aaronland/ios-wunderkammer/issues/17
+    
+    public init?(oembed: OEmbedResponse) {
+        
+        guard let _ = oembed.object_uri else {
+            return nil
+        }
+        
+        self.oembed = oembed
+    }
+    
+    public func Collection() -> String {
+        return "Gallery"
+    }
+    
+    public func ObjectID() -> String {
+        return self.oembed.object_uri!
+    }
+    
+    public func ObjectURL() -> String {
+        return self.oembed.author_url!
+    }
+    
+    public func ObjectURI() -> String {
+        
+        guard let object_uri = self.oembed.object_uri else {
+            let id = self.ObjectID()
+            return "gallery://x/\(id)"
+        }
+        
+        return object_uri
+    }
+    
+    public func ObjectTitle() -> String {
+        return self.oembed.title
+    }
+    
+    public func ImageURL() -> String {
+        
+        guard let data_url = self.oembed.data_url else {
+            return self.oembed.url
+        }
+        
+        return data_url
+    }
+    
+    public func ThumbnailURL() -> String? {
+                
+        guard let data_url = self.oembed.thumbnail_data_url else {
+            return self.oembed.thumbnail_url
+        }
+        
+        return data_url
+    }
+    
+    public func Raw() -> OEmbedResponse {
+        return self.oembed
+    }
+    
+}
+
 public struct SQLiteCollectionOptions {
     public var root: String
     public var scheme: String
@@ -25,10 +90,8 @@ public struct SQLiteCollectionOptions {
 }
 
 public class SQLiteCollection: Collection, Sequence {
-    
-    // FIX ME
-    
-    private var cache = NSCache<NSString,CollectionOEmbed>()
+        
+    private var cache = NSCache<NSString,SQLiteOEmbedRecord>()
     private var databases = [String:FMDatabase]()
     
     private var scheme: String
@@ -239,7 +302,7 @@ public class SQLiteCollection: Collection, Sequence {
             
             // FIX ME
             
-            guard let collection_oe = GalleryOEmbed(oembed: oe_response) else {
+            guard let collection_oe = SQLiteOEmbedRecord(oembed: oe_response) else {
                 return .failure(SQLiteCollectionErrors.invalidOEmbed)
             }
             
