@@ -6,46 +6,39 @@ import URITemplate
 
 import Logging
 
-public enum SQLiteCollectionErrors: Error {
-    case missingScheme
-    case missingDatabaseRoot
-    case missingDatabaseFiles
-    case databaseOpen
-    case invalidURL
-    case invalidOEmbed
-    case missingUnitID
-    case missingUnitDatabase
-    case missingOEmbedQueryParameter
-}
+// MARK: - SQLiteOEmbedRecord
 
 public enum SQLiteOEmbedRecordErrors: Error {
         case missingObjectURI
     case missingScheme
     
 }
+
+public struct SQLiteOEmbedRecordOptions {
+    public var object_url_template: String
+    public var collection: String
+}
+
 public class SQLiteOEmbedRecord: CollectionOEmbed {
     
+    private var options: SQLiteOEmbedRecordOptions
     private var oembed: OEmbedResponse
-    private var scheme: String
+    // private var scheme: String
     
     // https://github.com/aaronland/ios-wunderkammer/issues/17
     
-    public init (oembed: OEmbedResponse, scheme: String? = "sqlite") throws {
+    public init (options: SQLiteOEmbedRecordOptions, oembed: OEmbedResponse) throws {
         
         guard let _ = oembed.object_uri else {
             throw SQLiteOEmbedRecordErrors.missingObjectURI
         }
-        
-        guard let _ = scheme else {
-            throw SQLiteOEmbedRecordErrors.missingScheme
-        }
-        
-        self.scheme = scheme!
+
+        self.options = options
         self.oembed = oembed
     }
     
     public func Collection() -> String {
-        return "Gallery"
+        return self.options.collection
     }
     
     public func ObjectID() -> String {
@@ -59,8 +52,13 @@ public class SQLiteOEmbedRecord: CollectionOEmbed {
     public func ObjectURI() -> String {
         
         guard let object_uri = self.oembed.object_uri else {
-            let id = self.ObjectID()
-            return "\(self.scheme)://x/\(id)"
+            
+            let t = URITemplate(template: self.options.object_url_template)
+            let url = t.expand(["object_id": self.ObjectID()])
+            
+            return url
+            //let id = self.ObjectID()
+            //return "\(self.scheme)://x/\(id)"
         }
         
         return object_uri
@@ -94,45 +92,57 @@ public class SQLiteOEmbedRecord: CollectionOEmbed {
     
 }
 
-/*
+// MARK: - SQLiteCollection
+
+public enum SQLiteCollectionErrors: Error {
+    case missingScheme
+    case missingDatabaseRoot
+    case missingDatabaseFiles
+    case databaseOpen
+    case invalidURL
+    case invalidOEmbed
+    case missingUnitID
+    case missingUnitDatabase
+    case missingOEmbedQueryParameter
+}
+
+public struct SQLiteCollectionCapabilities {
+    public var nfcTags: Bool
+    public var bleTags: Bool
+    public var randomObject: Bool
+    public var saveObject: Bool
+}
+
 public struct SQLiteCollectionOptions {
     public var root: String
+    public var name: String
     public var scheme: String
     public var resolver: DatabaseResolver
-    public var logginer: Logger?
+    public var capabilities: SQLiteCollectionCapabilities
+    public var object_url_template: String
+    public var object_tag_template: String
+    public var logger: Logger?
 }
-*/
 
 public class SQLiteCollection: Collection, Sequence {
         
     private var cache = NSCache<NSString,SQLiteOEmbedRecord>()
     private var databases = [String:FMDatabase]()
     
-    private var scheme: String
+    private var options: SQLiteCollectionOptions
     
-    private var resolver: Wunderkammer.DatabaseResolver
-    
-    public var logger: Logger?
-    
-    public init(root: String, resolver: DatabaseResolver, scheme: String? = "sqlite", logger: Logger? = nil) throws {
+    public init(options: SQLiteCollectionOptions) throws {
         
-        self.logger = logger
-        self.resolver = resolver
-        
-        guard let _ = scheme else {
-            throw SQLiteCollectionErrors.missingScheme
-        }
-        
-        self.scheme = scheme!
+        self.options = options
         
         let fm = FileManager.default
         
         let paths = fm.urls(for: .documentDirectory, in: .userDomainMask)
         let first = paths[0]
         
-        let root = first.appendingPathComponent(root)
+        let root = first.appendingPathComponent(options.root)
 
-        self.logger?.debug("Database root is \(root)")
+        options.logger?.debug("Database root is \(root)")
         
         if !fm.fileExists(atPath: root.path){
             throw SQLiteCollectionErrors.missingDatabaseRoot
@@ -174,7 +184,7 @@ public class SQLiteCollection: Collection, Sequence {
                 // for a record returned by a given database and not the
                 // URL of the database itself (20200918/thisisaaronland)
                 
-                let db_result = resolver.DeriveDatabase(url: url)
+                let db_result = options.resolver.DeriveDatabase(url: url)
                 
                 switch db_result {
                 case .failure(let error):
@@ -268,14 +278,15 @@ public class SQLiteCollection: Collection, Sequence {
             }
             
             q = "SELECT body FROM oembed WHERE object_uri = ?"
+            
             target = nfc_url
-            unit = self.scheme
+            unit = self.options.scheme
             
         } else {
             
             // query for a particular representation of the object
             
-            let db_result = self.resolver.DeriveDatabase(url: url)
+            let db_result = self.options.resolver.DeriveDatabase(url: url)
             
             switch db_result {
             case .failure(let error):
@@ -324,7 +335,14 @@ public class SQLiteCollection: Collection, Sequence {
             var collection_oe: SQLiteOEmbedRecord
             
             do {
-              collection_oe = try SQLiteOEmbedRecord(oembed: oe_response)
+                
+                let opts = SQLiteOEmbedRecordOptions(
+                    object_url_template: self.options.object_url_template,
+                    collection: self.options.name
+                )
+                
+                collection_oe = try SQLiteOEmbedRecord(options: opts, oembed: oe_response)
+                
             } catch (let error) {
                 return .failure(error)
             }
@@ -336,12 +354,14 @@ public class SQLiteCollection: Collection, Sequence {
     }
     
     public func ObjectTagTemplate() -> Result<URITemplate, Error> {
-        let t = URITemplate(template: "\(self.scheme)://o/{objectid}")
+        // let t = URITemplate(template: "\(self.options.scheme)://o/{objectid}")
+        let t = URITemplate(template: self.options.object_tag_template)
         return .success(t)
     }
     
     public func ObjectURLTemplate() -> Result<URITemplate, Error> {
-        let t = URITemplate(template: "\(self.scheme)://o/{objectid}")
+        // let t = URITemplate(template: "\(self.options.scheme)://o/{objectid}")
+        let t = URITemplate(template: self.options.object_url_template)
         return .success(t)
     }
     
@@ -351,16 +371,16 @@ public class SQLiteCollection: Collection, Sequence {
     }
     
     public func HasCapability(capability: CollectionCapabilities) -> Result<Bool, Error> {
-        
-        // FIX ME
-        
+                
         switch capability {
+        case CollectionCapabilities.bleTags:
+            return .success(self.options.capabilities.bleTags)
         case CollectionCapabilities.nfcTags:
-            return .success(false)
+            return .success(self.options.capabilities.nfcTags)
         case CollectionCapabilities.randomObject:
-            return .success(true)
+            return .success(self.options.capabilities.randomObject)
         case CollectionCapabilities.saveObject:
-            return .success(false)
+            return .success(self.options.capabilities.saveObject)
         default:
             return .success(false)
         }
@@ -371,6 +391,8 @@ public class SQLiteCollection: Collection, Sequence {
     }
     
 }
+
+// MARK: - SQLiteCollectionIterator
 
 public struct SQLiteCollectionIteratorResponse {
     public var url: URL
