@@ -111,6 +111,14 @@ public struct SQLiteCollectionCapabilities {
     public var bleTags: Bool
     public var randomObject: Bool
     public var saveObject: Bool
+    
+    public init(nfcTags: Bool = false, bleTags: Bool = false, randomObject: Bool = false, saveObject: Bool = false){
+        
+        self.nfcTags = nfcTags
+        self.bleTags = bleTags
+        self.randomObject = randomObject
+        self.saveObject = saveObject
+    }
 }
 
 public struct SQLiteCollectionOptions {
