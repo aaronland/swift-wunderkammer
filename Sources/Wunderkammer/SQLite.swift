@@ -142,6 +142,7 @@ public struct SQLiteCollectionOptions {
         self.object_tag_template = object_tag_template
         self.logger = logger
     }
+    
 }
 
 public class SQLiteCollection: Collection, Sequence {
