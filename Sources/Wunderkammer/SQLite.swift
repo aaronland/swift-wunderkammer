@@ -100,6 +100,7 @@ public enum SQLiteCollectionErrors: Error {
     case missingDatabaseFiles
     case databaseOpen
     case invalidURL
+    case invalidNFCURL
     case invalidOEmbed
     case missingUnitID
     case missingUnitDatabase
@@ -121,32 +122,6 @@ public struct SQLiteCollectionCapabilities {
     }
 }
 
-/*
-public struct SQLiteCollectionOptions {
-    public var root: String
-    public var name: String
-    public var scheme: String
-    public var resolver: DatabaseResolver
-    public var capabilities: SQLiteCollectionCapabilities
-    public var object_url_template: String
-    public var object_tag_template: String
-    public var logger: Logger?
-    
-    public init(root: String, name: String, scheme: String, resolver: DatabaseResolver, capabilities: SQLiteCollectionCapabilities, object_url_template: String, object_tag_template: String, logger: Logger? = nil){
-        
-        self.root = root
-        self.name = name
-        self.scheme = scheme
-        self.resolver = resolver
-        self.capabilities = capabilities
-        self.object_url_template = object_url_template
-        self.object_tag_template = object_tag_template
-        self.logger = logger
-    }
-    
-}
-*/
-
 public class SQLiteCollection: Collection, Sequence {
         
     private var cache = NSCache<NSString,SQLiteOEmbedRecord>()
@@ -156,18 +131,16 @@ public class SQLiteCollection: Collection, Sequence {
     
     public var root: String
     public var name: String
-    public var scheme: String
     public var resolver: DatabaseResolver
     public var capabilities: SQLiteCollectionCapabilities
     public var object_url_template: String
     public var object_tag_template: String
     public var logger: Logger?
     
-    public init(root: String, name: String, scheme: String, resolver: DatabaseResolver, capabilities: SQLiteCollectionCapabilities, object_url_template: String, object_tag_template: String, logger: Logger? = nil) throws {
+    public init(root: String, name: String, resolver: DatabaseResolver, capabilities: SQLiteCollectionCapabilities, object_url_template: String, object_tag_template: String, logger: Logger? = nil) throws {
         
         self.root = root
         self.name = name
-        self.scheme = scheme
         self.resolver = resolver
         self.capabilities = capabilities
         self.object_url_template = object_url_template
@@ -241,19 +214,25 @@ public class SQLiteCollection: Collection, Sequence {
         // let q = "SELECT url, CASE LENGTH(JSON_EXTRACT(body, '$.thumbnail_url')) WHEN 0 THEN 0 ELSE 1 END AS has_thumbnail, CASE LENGTH(JSON_EXTRACT(body, '$.data_url')) WHEN 0 THEN 0 ELSE 1 END AS has_data_url, CASE LENGTH(JSON_EXTRACT(body, '$.thumbnail_data_url')) WHEN 0 THEN 0 ELSE 1 END AS has_thumbnail_data_url FROM oembed;"
         
         let q = "SELECT url, has_thumbnail, has_data_url, has_thumbnail_data_url FROM oembed"
-        var results: FMResultSet?
         
-        do {
+        var results = [FMResultSet]()
+        
+        for (scheme, db) in self.databases {
             
-            // FIX ME
+            var resultset: FMResultSet
             
-            let rs = try databases["gallery"]!.executeQuery(q, values: nil)
-            results = rs
-        } catch (let error) {
-            print("SAD", error)
+            do {
+                let rs = try db.executeQuery(q, values: nil)
+                resultset = rs
+            } catch (let error) {
+                self.logger?.warning("Failed to create iterator for database \(scheme) : \(error)")
+                continue
+            }
+            
+            results.append(resultset)
         }
         
-        return SQLiteCollectionIterator(collection: self, results: results)
+        return SQLiteCollectionIterator(collection: self, results: results, logger: self.logger)
     }
     
     public func GetRandomURL(completion: @escaping (Result<URL, Error>) -> ()) {
@@ -319,7 +298,19 @@ public class SQLiteCollection: Collection, Sequence {
             q = "SELECT body FROM oembed WHERE object_uri = ?"
             
             target = nfc_url
-            unit = self.scheme
+            
+            guard let url = URL(string: nfc_url) else {
+                return .failure(SQLiteCollectionErrors.invalidNFCURL)
+            }
+            
+            let db_result = self.resolver.DeriveDatabase(url: url)
+            
+            switch db_result {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let db_uid):
+                unit = db_uid
+            }
             
         } else {
             
@@ -444,19 +435,36 @@ public class SQLiteCollectionIterator: IteratorProtocol {
     
     public typealias Element = SQLiteCollectionIteratorResponse
     
-    private let collection: Collection
-    private let results: FMResultSet?
+    private let collection: Wunderkammer.Collection
+    private let results: [ FMResultSet ]
     
-    init(collection: Collection, results: FMResultSet?) {
+    private var logger: Logger?
+    private var current = 0
+    
+    init(collection: Wunderkammer.Collection, results: [ FMResultSet ], logger: Logger? = nil) {
         self.collection = collection
         self.results = results
     }
     
     public func next() -> SQLiteCollectionIteratorResponse? {
         
-        guard let rs = self.results else {
-            return nil
+        var i = self.current
+        
+        while i < self.results.count {
+            
+            let rs = self.results[i]
+            
+            if let rsp = self.nextWithResultSet(rs: rs) {
+                return rsp
+            }
+            
+            i += 1
         }
+        
+        return nil
+    }
+    
+    private func nextWithResultSet(rs: FMResultSet) -> SQLiteCollectionIteratorResponse? {
         
         rs.next()
         
@@ -509,5 +517,7 @@ public class SQLiteCollectionIterator: IteratorProtocol {
         
         return rsp
     }
+    
+    
 }
 
