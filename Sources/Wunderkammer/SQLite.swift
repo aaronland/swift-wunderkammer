@@ -130,6 +130,18 @@ public struct SQLiteCollectionOptions {
     public var object_url_template: String
     public var object_tag_template: String
     public var logger: Logger?
+    
+    public init(root: String, name: String, scheme: String, resolver: DatabaseResolver, capabilities: SQLiteCollectionCapabilities, object_url_template: String, object_tag_template: String, logger: Logger? = nil){
+        
+        self.root = root
+        self.name = name
+        self.scheme = scheme
+        self.resolver = resolver
+        self.capabilities = capabilities
+        self.object_url_template = object_url_template
+        self.object_tag_template = object_tag_template
+        self.logger = logger
+    }
 }
 
 public class SQLiteCollection: Collection, Sequence {
