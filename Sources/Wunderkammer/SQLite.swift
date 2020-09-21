@@ -121,6 +121,7 @@ public struct SQLiteCollectionCapabilities {
     }
 }
 
+/*
 public struct SQLiteCollectionOptions {
     public var root: String
     public var name: String
@@ -144,28 +145,45 @@ public struct SQLiteCollectionOptions {
     }
     
 }
+*/
 
 public class SQLiteCollection: Collection, Sequence {
         
     private var cache = NSCache<NSString,SQLiteOEmbedRecord>()
     private var databases = [String:FMDatabase]()
     
-    private var options: SQLiteCollectionOptions
+    // private var options: SQLiteCollectionOptions
     
-    public init(options: SQLiteCollectionOptions) throws {
+    public var root: String
+    public var name: String
+    public var scheme: String
+    public var resolver: DatabaseResolver
+    public var capabilities: SQLiteCollectionCapabilities
+    public var object_url_template: String
+    public var object_tag_template: String
+    public var logger: Logger?
+    
+    public init(root: String, name: String, scheme: String, resolver: DatabaseResolver, capabilities: SQLiteCollectionCapabilities, object_url_template: String, object_tag_template: String, logger: Logger? = nil) throws {
         
-        self.options = options
+        self.root = root
+        self.name = name
+        self.scheme = scheme
+        self.resolver = resolver
+        self.capabilities = capabilities
+        self.object_url_template = object_url_template
+        self.object_tag_template = object_tag_template
+        self.logger = logger
         
         let fm = FileManager.default
         
         let paths = fm.urls(for: .documentDirectory, in: .userDomainMask)
         let first = paths[0]
         
-        let root = first.appendingPathComponent(options.root)
+        let abs_root = first.appendingPathComponent(self.root)
 
-        options.logger?.debug("Database root is \(root)")
+        logger?.debug("Database root is \(abs_root)")
         
-        if !fm.fileExists(atPath: root.path){
+        if !fm.fileExists(atPath: abs_root.path){
             throw SQLiteCollectionErrors.missingDatabaseRoot
         }
         
@@ -173,7 +191,7 @@ public class SQLiteCollection: Collection, Sequence {
         
         do {
             
-            let contents = try fm.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
+            let contents = try fm.contentsOfDirectory(at: abs_root, includingPropertiesForKeys: nil)
             
             db_uris = contents.filter{ $0.pathExtension == "db" }
             db_uris = contents
@@ -205,7 +223,7 @@ public class SQLiteCollection: Collection, Sequence {
                 // for a record returned by a given database and not the
                 // URL of the database itself (20200918/thisisaaronland)
                 
-                let db_result = options.resolver.DeriveDatabase(url: url)
+                let db_result = resolver.DeriveDatabase(url: url)
                 
                 switch db_result {
                 case .failure(let error):
@@ -301,13 +319,13 @@ public class SQLiteCollection: Collection, Sequence {
             q = "SELECT body FROM oembed WHERE object_uri = ?"
             
             target = nfc_url
-            unit = self.options.scheme
+            unit = self.scheme
             
         } else {
             
             // query for a particular representation of the object
             
-            let db_result = self.options.resolver.DeriveDatabase(url: url)
+            let db_result = self.resolver.DeriveDatabase(url: url)
             
             switch db_result {
             case .failure(let error):
@@ -358,8 +376,8 @@ public class SQLiteCollection: Collection, Sequence {
             do {
                 
                 let opts = SQLiteOEmbedRecordOptions(
-                    object_url_template: self.options.object_url_template,
-                    collection: self.options.name
+                    object_url_template: self.object_url_template,
+                    collection: self.name
                 )
                 
                 collection_oe = try SQLiteOEmbedRecord(options: opts, oembed: oe_response)
@@ -376,13 +394,13 @@ public class SQLiteCollection: Collection, Sequence {
     
     public func ObjectTagTemplate() -> Result<URITemplate, Error> {
         // let t = URITemplate(template: "\(self.options.scheme)://o/{objectid}")
-        let t = URITemplate(template: self.options.object_tag_template)
+        let t = URITemplate(template: self.object_tag_template)
         return .success(t)
     }
     
     public func ObjectURLTemplate() -> Result<URITemplate, Error> {
         // let t = URITemplate(template: "\(self.options.scheme)://o/{objectid}")
-        let t = URITemplate(template: self.options.object_url_template)
+        let t = URITemplate(template: self.object_url_template)
         return .success(t)
     }
     
@@ -395,13 +413,13 @@ public class SQLiteCollection: Collection, Sequence {
                 
         switch capability {
         case CollectionCapabilities.bleTags:
-            return .success(self.options.capabilities.bleTags)
+            return .success(self.capabilities.bleTags)
         case CollectionCapabilities.nfcTags:
-            return .success(self.options.capabilities.nfcTags)
+            return .success(self.capabilities.nfcTags)
         case CollectionCapabilities.randomObject:
-            return .success(self.options.capabilities.randomObject)
+            return .success(self.capabilities.randomObject)
         case CollectionCapabilities.saveObject:
-            return .success(self.options.capabilities.saveObject)
+            return .success(self.capabilities.saveObject)
         default:
             return .success(false)
         }
